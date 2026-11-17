@@ -1,276 +1,384 @@
-// Six-mission story chain for harbor boss Marta Vidal, plus taxi fares.
-// Missions are marker-driven with dialogue cards and cash rewards.
-import { WORLD } from './city.js';
+// missions.js — the story chain for Marta Vidal (6 missions), taxi fares,
+// dialogue cards, rewards and failure handling.
+
+import { addWanted } from './police.js';
+import { makeCar } from './vehicles.js';
+import { makePed } from './pedestrians.js';
+import { saveGame } from './save.js';
+import { WORLD, BEACH_X, collideCircle } from './city.js';
 
 export const MISSIONS = [
-  { title: 'First Run', sub: 'Drive Marta’s package to the marina before the clock runs out.', reward: 400 },
-  { title: 'Loud Money', sub: 'Steal the gold Coral GT at the market and bring it to Talleres Pipo.', reward: 600 },
-  { title: 'Beach Debts', sub: 'Three debtors are hiding on the beach. Lean on each of them.', reward: 500 },
-  { title: 'Hot Cargo', sub: 'Escort the warehouse van across town. The cops already know.', reward: 800 },
-  { title: 'Sirens', sub: 'Lose a 4-star wanted level, then slip to the safehouse.', reward: 1000 },
-  { title: 'Serena Goodbye', sub: 'Five stars. One boat at the lighthouse. Get out of Serena Bay.', reward: 1500 },
+  {
+    name: 'First Run',
+    reward: 500,
+    brief: [
+      'MARTA VIDAL: "Marco. You drive, I pay. Simple."',
+      '"Take this package to the Marina before the tide turns. Ninety seconds. No sightseeing."',
+      '"The car out front is yours to borrow. Try not to scratch it."',
+    ],
+    objective: 'Drive the package to Marina Serena before the timer runs out.',
+  },
+  {
+    name: 'Loud Money',
+    reward: 800,
+    brief: [
+      'MARTA VIDAL: "A gold coupe is parked by Market Square. Its owner owes me."',
+      '"Take it. Bring it to Pipo\'s garage. If the police notice, that is your problem."',
+      '"Do not scratch the paint. Pipo hates repainting gold."',
+    ],
+    objective: 'Steal the gold coupe at Market Square and deliver it to Talleres Pipo.',
+  },
+  {
+    name: 'Beach Debts',
+    reward: 900,
+    brief: [
+      'MARTA VIDAL: "Three men owe me money. They hide on the beach like crabs."',
+      '"Walk up to each one and remind them. Press E when you are close. No shooting — I want them scared, not dead."',
+      '"Come back when all three have paid up."',
+    ],
+    objective: 'Intimidate 3 debtors on Playa Serena (walk up and press E).',
+  },
+  {
+    name: 'Hot Cargo',
+    reward: 1200,
+    brief: [
+      'MARTA VIDAL: "A van full of cargo needs an escort across town, to the Marina."',
+      '"Stay close to it. The police will be watching — I have already made sure of that."',
+      '"If the van stops, you stop. If the van moves, you move."',
+    ],
+    objective: 'Escort the van to the Marina. Stay within range. 2-star heat from the start.',
+  },
+  {
+    name: 'Sirens',
+    reward: 1500,
+    brief: [
+      'MARTA VIDAL: "The police have your name now, Marco. Four stars."',
+      '"Lose them. Hide, repaint at Pipo\'s, do whatever it takes — then come to the Safehouse."',
+      '"Do not bring them to my door."',
+    ],
+    objective: 'Lose the 4-star wanted level, then reach the Safehouse.',
+  },
+  {
+    name: 'Serena Goodbye',
+    reward: 3000,
+    brief: [
+      'MARTA VIDAL: "One last run. The boat at the Lighthouse leaves with or without you."',
+      '"Every cop in Serena Bay will be on your tail. Five stars. Two and a half minutes."',
+      '"Make it to the boat, Marco — and do not look back."',
+    ],
+    objective: 'Reach the Lighthouse boat with 5 stars before the countdown ends.',
+  },
 ];
 
-export const SPOTS = {
-  warehouse: { x: 610, y: 2350, label: 'Vidal Warehouse' },
-  marina: { x: 2345, y: 2130, label: 'Marina' },
-  garage: { x: 1255, y: 1835, label: 'Talleres Pipo' },
-  safehouse: { x: 300, y: 1300, label: 'Safehouse' },
-  lighthouse: { x: 2430, y: 180, label: 'Lighthouse Boat' },
-  market: { x: 890, y: 1515, label: 'Mercado Central' },
-  beach: { x: 2400, y: 900, label: 'Playa Serena' },
-};
-
-const DIALOGUE = [
-  [
-    ['Marta Vidal', 'Marco. You run packages, you eat. First one is easy: a sealed case for the marina. The boat leaves soon — do not be late.'],
-    ['Marco Reyes', 'On it, Marta. Keys in the ignition?'],
-    ['Marta Vidal', 'Take any car you like. In this city, cars are… borrowed. Go.'],
-  ],
-  [
-    ['Marta Vidal', 'A gold Coral GT is parked at the market. Its owner owes me. Bring it to Pipo — he will make it disappear.'],
-    ['Marco Reyes', 'Stealing in daylight? The cops will notice.'],
-    ['Marta Vidal', 'Then be quick. Pipo is waiting with the spray gun.'],
-  ],
-  [
-    ['Marta Vidal', 'Three men owe the harbor money and think the beach hides them. Go remind them. A firm word is enough — mostly.'],
-    ['Marco Reyes', 'And if a firm word is not enough?'],
-    ['Marta Vidal', 'Then your pistol does the talking. Do not kill them. I need them alive to pay.'],
-  ],
-  [
-    ['Marta Vidal', 'A van full of cargo has to cross town. Ride with it. The police have the route — expect company.'],
-    ['Marco Reyes', 'Two stars before I even start?'],
-    ['Marta Vidal', 'Consider it a compliment. Keep the van alive.'],
-  ],
-  [
-    ['Marta Vidal', 'The department wants your head tonight. Four stars, Marco. Lose them, then come to the safehouse. Do not bring the sirens with you.'],
-    ['Marco Reyes', 'Lose four stars and walk away clean. Sure. Easy.'],
-  ],
-  [
-    ['Marta Vidal', 'This is the last one. The boat at the lighthouse leaves at dawn, and every cop in Serena Bay knows it. Five stars, one countdown.'],
-    ['Marco Reyes', 'Then I had better not miss the boat.'],
-    ['Marta Vidal', 'Marco — whatever happens tonight: thank you. Now go.'],
-  ],
+const MISSION_STARTS = [
+  'warehouse', 'warehouse', 'warehouse', 'warehouse', 'safehouse', 'warehouse',
 ];
 
-export function startMission(S, index) {
-  const def = MISSIONS[index];
-  S.mission = { index, stage: 0, timer: 0, data: {}, active: true };
-  S.showDialogue(DIALOGUE[index], () => {
-    S.banner(def.title, def.sub);
-    S.audio.sting();
-    setupMission(S);
-  });
-  S.objective = def.sub;
+function lm(G, key) {
+  return G.city.landmarks[key];
 }
 
-function setupMission(S) {
-  const m = S.mission;
-  const i = m.index;
-  if (i === 0) { m.timer = 150; m.data.target = SPOTS.marina; }
-  if (i === 1) {
-    const coupe = {
-      x: SPOTS.market.x + 40, y: SPOTS.market.y + 10, angle: 0, speed: 0,
-      color: '#f1c40f', name: 'Coral GT', traffic: false, parked: true,
-      police: false, hp: 100, targetCar: true,
-    };
-    S.cars.push(coupe);
-    m.data.coupe = coupe;
-    m.data.target = SPOTS.market;
-  }
-  if (i === 2) {
-    m.data.debtors = [];
-    for (let k = 0; k < 3; k++) {
-      const p = {
-        x: 2380 + Math.random() * 60, y: 500 + k * 320 + Math.random() * 80,
-        angle: 0, speed: 40, shirt: '#8e44ad', skin: '#e0ac69', hp: 100,
-        flee: 0, panic: 0, walkPhase: 0, horizontal: false, road: 2400, dir: 1,
-        changeIn: 5, taxi: false, dead: false, debtor: true,
-      };
-      S.peds.push(p);
-      m.data.debtors.push(p);
-    }
-    m.data.target = SPOTS.beach;
-  }
-  if (i === 3) {
-    const van = {
-      x: SPOTS.warehouse.x + 120, y: SPOTS.warehouse.y, angle: 0, speed: 0,
-      color: '#7f8c8d', name: 'Harbor Van', traffic: false, parked: false,
-      police: false, hp: 200, escort: true, axis: 'h', lane: 1, along: SPOTS.warehouse.x,
-    };
-    S.cars.push(van);
-    m.data.van = van;
-    m.data.target = SPOTS.marina;
-    S.addWanted(2, 'The escort is blown');
-  }
-  if (i === 4) {
-    S.player.wanted = 4;
-    S.audio.setSiren(true);
-    m.data.target = SPOTS.safehouse;
-  }
-  if (i === 5) {
-    S.player.wanted = 5;
-    S.audio.setSiren(true);
-    m.timer = 150;
-    m.data.target = SPOTS.lighthouse;
-  }
+/** Where the player goes to pick up the current mission (null when done). */
+export function missionStartPoint(G) {
+  const m = G.mission;
+  if (m.index >= MISSIONS.length) return null;
+  return lm(G, MISSION_STARTS[m.index]);
 }
 
-function reach(S, target, radius = 70) {
-  return Math.hypot(S.player.x - target.x, S.player.y - target.y) < radius;
-}
-
-export function completeMission(S) {
-  const m = S.mission;
-  const def = MISSIONS[m.index];
-  S.player.cash += def.reward;
-  S.floatText(S.player.x, S.player.y, `+$${def.reward}`, '#7dff9a');
-  S.audio.cash();
-  S.audio.sting();
-  S.banner('MISSION PASSED', `${def.title}  ·  +$${def.reward}`);
-  S.mission = { index: m.index + 1, stage: 0, timer: 0, data: {}, active: false };
-  S.storyDone = m.index + 1 >= MISSIONS.length;
-  if (S.storyDone) {
-    S.showEndcard('SERENA GOODBYE', 'The boat pulls away from the lighthouse as the sirens fade behind you. Marta’s last words echo over the water: “Whatever happens tonight — thank you.”\n\nFree roam continues. The city is yours, Marco.');
+/** Where the minimap blip points right now. */
+export function missionBlip(G) {
+  const m = G.mission;
+  if (m.index >= MISSIONS.length) return null;
+  if (m.phase === 'idle') {
+    const s = missionStartPoint(G);
+    return { x: s.x, y: s.y, label: MISSIONS[m.index].name };
   }
-  S.saveGame();
-  if (S.storyDone) S.objective = 'Free roam — Serena Bay is yours.';
-  else S.objective = `Next job: ${MISSIONS[m.index + 1].title} — go to the Vidal Warehouse.`;
-}
-
-export function failMission(S, reason) {
-  const m = S.mission;
-  if (!m || !m.active) return;
-  S.audio.fail();
-  S.banner('MISSION FAILED', reason);
-  S.mission = { index: m.index, stage: 0, timer: 0, data: {}, active: false };
-  S.objective = `Job failed: ${MISSIONS[m.index].title} — return to the Vidal Warehouse to retry.`;
-}
-
-export function currentMarker(S) {
-  const m = S.mission;
-  if (m && m.active) {
-    if (m.index === 0) return m.data.target;
-    if (m.index === 1) return m.stage === 0 ? m.data.target : SPOTS.garage;
-    if (m.index === 2) {
-      const left = m.data.debtors.filter((d) => !d.done);
-      return left.length ? { x: left[0].x, y: left[0].y, label: 'Debtor' } : SPOTS.beach;
-    }
-    if (m.index === 3) return m.data.van ? { x: m.data.van.x, y: m.data.van.y, label: 'Harbor Van' } : SPOTS.marina;
-    if (m.index === 4) return S.player.wanted > 0 ? { x: S.player.x, y: S.player.y, label: 'Lose the cops' } : SPOTS.safehouse;
-    if (m.index === 5) return m.data.target;
-  }
-  // No active mission: point at the warehouse to start the next job.
-  if (!S.storyDone) return SPOTS.warehouse;
+  if (m.target) return { x: m.target.x, y: m.target.y, label: m.target.label };
   return null;
 }
 
-export function updateMissions(S, dt) {
-  const m = S.mission;
-  const p = S.player;
+/** Current objective line for the HUD. */
+export function missionObjective(G) {
+  const m = G.mission;
+  if (m.index >= MISSIONS.length) return 'Story complete — free roam. Take a taxi fare or enjoy Serena Bay.';
+  if (m.phase === 'idle') return `Go to the M marker to start: ${MISSIONS[m.index].name}`;
+  return MISSIONS[m.index].objective;
+}
 
-  // Start a mission by walking into the warehouse marker.
-  if ((!m || !m.active) && !S.storyDone && S.state === 'playing') {
-    if (reach(S, SPOTS.warehouse, 90)) startMission(S, m ? m.index : 0);
+function openDialogue(G, title, lines, onDone) {
+  G.dialogue = { title, lines, onDone };
+  G.mode = 'dialogue';
+  G.audio.dialogue();
+}
+
+function completeMission(G) {
+  const m = G.mission;
+  const def = MISSIONS[m.index];
+  G.player.cash += def.reward;
+  G.floaters.push({ x: G.player.x, y: G.player.y - 40, text: `+$${def.reward}`, life: 1.8, color: '#7ddb8a' });
+  G.audio.sting();
+  G.banner = { text: `MISSION COMPLETE — ${def.name}  (+$${def.reward})`, timer: 4 };
+  m.index += 1;
+  m.phase = 'idle';
+  m.timer = 0;
+  m.target = null;
+  m.data = {};
+  if (m.index >= MISSIONS.length) {
+    m.storyDone = true;
+    openDialogue(G, 'Serena Goodbye', [
+      'The boat pulls away from the Lighthouse as the sirens fade behind you.',
+      'Marta watches from the dock, smoking, smiling. "You did good, Marco."',
+      'Serena Bay is yours now. Free roam continues — the city never sleeps.',
+    ], null);
   }
+  saveGame(G);
+}
 
-  // Taxi fares: glowing ped near the player, E to accept (handled in main).
-  if (!S.taxi.active && Math.random() < dt * 0.02 && !p.car) {
-    const near = S.peds.filter((x) => !x.dead && !x.debtor && Math.hypot(x.x - p.x, x.y - p.y) < 220);
-    if (near.length) {
-      const ped = near[0];
-      ped.taxi = true;
-      S.taxi.candidate = ped;
-      S.toast('A fare is waving you down — press E to pick them up', 3);
+function failMission(G, reason) {
+  const m = G.mission;
+  const def = MISSIONS[m.index];
+  G.audio.fail();
+  m.phase = 'idle';
+  m.timer = 0;
+  m.target = null;
+  m.data = {};
+  openDialogue(G, 'MISSION FAILED', [
+    `"${def.name}" — ${reason}`,
+    'Marta is not angry. Marta is disappointed. Which is worse.',
+    'Go back to the M marker when you are ready to try again.',
+  ], null);
+}
+
+/** Begin the current mission: briefing card, then set up its world state. */
+export function startMission(G) {
+  const m = G.mission;
+  const def = MISSIONS[m.index];
+  if (!def) return;
+  m.phase = 'brief';
+  openDialogue(G, def.name, def.brief, () => {
+    m.phase = 'active';
+    m.data = {};
+    const L = G.city.landmarks;
+    if (m.index === 0) {
+      m.timer = 90;
+      m.target = { x: L.marina.x, y: L.marina.y, label: 'Marina Serena' };
+      // Marta's borrowed car waits outside the warehouse
+      const car = makeCar(L.warehouse.x + 90, L.warehouse.y + 40, 0, 'sedan', 'parked', '#e8e2d4');
+      G.cars.push(car);
+    } else if (m.index === 1) {
+      m.timer = 0;
+      m.target = { x: 1000, y: 1120, label: 'Gold Coupe' };
+      const coupe = makeCar(1000, 1120, Math.PI, 'coupe', 'mission', '#e0b13c');
+      G.cars.push(coupe);
+      m.data.coupeId = coupe.id;
+    } else if (m.index === 2) {
+      m.timer = 0;
+      const spots = [[BEACH_X + 30, 900], [BEACH_X + 30, 1200], [BEACH_X + 30, 1500]];
+      m.data.debtors = spots.map(([x, y]) => {
+        const ped = makePed(x, y, 'debtor');
+        ped.color = '#c94f3d';
+        G.peds.push(ped);
+        return ped;
+      });
+      m.data.done = 0;
+      m.target = { x: BEACH_X + 30, y: 1200, label: 'Beach Debtors' };
+    } else if (m.index === 3) {
+      m.timer = 0;
+      const van = makeCar(L.warehouse.x + 60, L.warehouse.y - 60, -Math.PI / 2, 'van', 'escort', '#4fae62');
+      van.health = 100;
+      G.cars.push(van);
+      m.data.van = van;
+      m.data.waypoints = [
+        { x: 1280, y: 1440 }, { x: 2080, y: 1440 }, { x: 2080, y: 640 }, { x: 2320, y: 640 },
+      ];
+      m.data.wp = 0;
+      m.target = { x: 2320, y: 640, label: 'Escort the Van' };
+      addWanted(G, 2, 'HOT CARGO');
+    } else if (m.index === 4) {
+      m.timer = 0;
+      m.target = { x: L.safehouse.x, y: L.safehouse.y, label: 'Safehouse' };
+      addWanted(G, 4, '4 STARS');
+    } else if (m.index === 5) {
+      m.timer = 150;
+      m.target = { x: L.lighthouse.x, y: L.lighthouse.y, label: 'Lighthouse Boat' };
+      addWanted(G, 5, '5 STARS');
+    }
+    G.banner = { text: `${def.name} — ${def.objective}`, timer: 5 };
+  });
+}
+
+/** Press E near the mission start marker. Returns true if it started something. */
+export function tryMissionInteract(G) {
+  const m = G.mission;
+  const p = G.player;
+  if (m.index >= MISSIONS.length) return false;
+  if (m.phase === 'idle') {
+    const s = missionStartPoint(G);
+    if (Math.hypot(p.x - s.x, p.y - s.y) < 110) {
+      startMission(G);
+      return true;
+    }
+    return false;
+  }
+  if (m.phase === 'active' && m.index === 2) {
+    // intimidate a nearby debtor
+    for (const debtor of m.data.debtors || []) {
+      if (debtor.state !== 'debtor') continue;
+      if (Math.hypot(p.x - debtor.x, p.y - debtor.y) < 70) {
+        debtor.state = 'flee';
+        debtor.timer = 4;
+        debtor.targetX = debtor.x - 300;
+        debtor.targetY = debtor.y;
+        m.data.done += 1;
+        G.audio.hit();
+        G.floaters.push({ x: debtor.x, y: debtor.y - 26, text: 'PAID UP', life: 1.4, color: '#7ddb8a' });
+        if (m.data.done >= 3) completeMission(G);
+        else m.target = { x: BEACH_X + 30, y: 1200, label: `${3 - m.data.done} debtors left` };
+        return true;
+      }
     }
   }
-  if (S.taxi.active) {
-    S.taxi.timer -= dt;
-    if (reach(S, S.taxi.dest, 80)) {
-      const pay = 25 + Math.round(S.taxi.timer);
-      p.cash += pay;
-      S.floatText(p.x, p.y, `+$${pay}`, '#7dff9a');
-      S.audio.cash();
-      S.toast(`Fare complete — +$${pay}`, 2);
-      S.taxiCount = (S.taxiCount || 0) + 1;
-      S.taxi = { active: false, candidate: null, dest: null, timer: 0 };
-      S.saveGame();
-    } else if (S.taxi.timer <= 0) {
-      S.toast('The fare gave up waiting.', 2);
-      S.taxi = { active: false, candidate: null, dest: null, timer: 0 };
-    }
+  return false;
+}
+
+/** Drive the escort van along its waypoints; it waits when Marco strays. */
+function updateEscortVan(G, dt) {
+  const m = G.mission;
+  const van = m.data.van;
+  if (!van) return;
+  const p = G.player;
+  const distToPlayer = Math.hypot(p.x - van.x, p.y - van.y);
+  const wps = m.data.waypoints;
+  const wp = wps[m.data.wp];
+  if (!wp) return;
+  if (distToPlayer > 320) {
+    van.speed = Math.max(0, van.speed - 200 * dt);
+    m.target = { x: van.x, y: van.y, label: 'Get back to the van!' };
+    return;
   }
+  m.target = { x: 2320, y: 640, label: 'Escort the Van' };
+  const dx = wp.x - van.x;
+  const dy = wp.y - van.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 40) {
+    m.data.wp += 1;
+    if (m.data.wp >= wps.length) {
+      completeMission(G);
+      return;
+    }
+    return;
+  }
+  const want = Math.atan2(dy, dx);
+  let diff = want - van.angle;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  van.angle += Math.max(-2.2 * dt, Math.min(2.2 * dt, diff * 4 * dt));
+  van.speed = Math.min(van.speed + 120 * dt, 150);
+  const nx = van.x + Math.cos(van.angle) * van.speed * dt;
+  const ny = van.y + Math.sin(van.angle) * van.speed * dt;
+  const res = collideCircle(G.city, nx, ny, van.len / 2 - 6);
+  van.x = res.x;
+  van.y = res.y;
+}
 
-  if (!m || !m.active) return;
+export function updateMissions(G, dt) {
+  const m = G.mission;
+  const p = G.player;
+  if (m.index >= MISSIONS.length || m.phase !== 'active') return;
 
-  // Mission timers.
-  if (m.index === 0 || m.index === 5) {
+  if (m.timer > 0) {
     m.timer -= dt;
-    if (m.timer <= 0) { failMission(S, 'Out of time.'); return; }
+    if (m.timer <= 0) {
+      if (m.index === 0) failMission(G, 'The package arrived too late. The tide turned.');
+      else if (m.index === 5) failMission(G, 'The boat left without you.');
+      return;
+    }
   }
 
   if (m.index === 0) {
-    if (reach(S, SPOTS.marina, 80)) completeMission(S);
+    const L = G.city.landmarks.marina;
+    if (p.inCar && Math.hypot(p.x - L.x, p.y - L.y) < 110) completeMission(G);
   } else if (m.index === 1) {
-    if (m.stage === 0) {
-      if (p.car === m.data.coupe) { m.stage = 1; S.toast('Got the Coral GT — take it to Talleres Pipo', 2.5); }
-    } else if (reach(S, SPOTS.garage, 90) && p.car === m.data.coupe) {
-      S.cars = S.cars.filter((c) => c !== m.data.coupe);
-      p.car = null;
-      completeMission(S);
-    }
-  } else if (m.index === 2) {
-    for (const d of m.data.debtors) {
-      if (!d.done && Math.hypot(p.x - d.x, p.y - d.y) < 46) {
-        d.done = true;
-        d.flee = 4; d.fleeX = p.x; d.fleeY = p.y;
-        S.audio.sting();
-        const left = m.data.debtors.filter((x) => !x.done).length;
-        S.toast(left ? `Debtor leaned on — ${left} to go` : 'All three debtors leaned on', 2.5);
-        if (left === 0) completeMission(S);
-      }
+    const coupe = G.cars.find((c) => c.id === m.data.coupeId);
+    const L = G.city.landmarks.pipo;
+    if (coupe && p.inCar === coupe && Math.hypot(p.x - L.x, p.y - L.y) < 110) {
+      completeMission(G);
+    } else if (coupe && p.inCar === coupe) {
+      m.target = { x: L.x, y: L.y, label: 'Deliver to Talleres Pipo' };
     }
   } else if (m.index === 3) {
-    const van = m.data.van;
-    if (!van || van.hp <= 0) { failMission(S, 'The van was destroyed.'); return; }
-    // Van crawls along the south road toward the marina.
-    if (van.x < SPOTS.marina.x - 40) {
-      van.angle = 0;
-      van.x += 62 * dt;
-      van.y = 2400 + 22;
-    } else if (van.y > SPOTS.marina.y + 40) {
-      van.angle = -Math.PI / 2;
-      van.y -= 62 * dt;
-      van.x = 2400 + 22;
-    }
-    if (Math.hypot(van.x - SPOTS.marina.x, van.y - SPOTS.marina.y) < 120) {
-      S.cars = S.cars.filter((c) => c !== van);
-      completeMission(S);
-    }
+    updateEscortVan(G, dt);
   } else if (m.index === 4) {
-    if (p.wanted === 0 && reach(S, SPOTS.safehouse, 90)) completeMission(S);
+    const L = G.city.landmarks.safehouse;
+    if (p.wanted === 0 && Math.hypot(p.x - L.x, p.y - L.y) < 110) completeMission(G);
   } else if (m.index === 5) {
-    if (reach(S, SPOTS.lighthouse, 80) && p.wanted >= 1) completeMission(S);
+    const L = G.city.landmarks.lighthouse;
+    if (Math.hypot(p.x - L.x, p.y - L.y) < 110) completeMission(G);
   }
 }
 
-// Start a taxi fare: the waving ped climbs in and names a destination.
-export function startTaxi(S) {
-  const ped = S.taxi.candidate;
-  if (!ped || ped.dead) return false;
-  const spots = [
-    { x: 300, y: 300, label: 'North Serena' },
-    { x: 890, y: 1515, label: 'Mercado Central' },
-    { x: 2345, y: 2130, label: 'Marina' },
-    { x: 610, y: 2350, label: 'Harbor South' },
-    { x: 1500, y: 300, label: 'Hotel Serena' },
-    { x: 2400, y: 900, label: 'Playa Serena' },
-  ];
-  const dest = spots[Math.floor(Math.random() * spots.length)];
-  ped.taxi = false;
-  ped.dead = true; // They "get in" — removed from the street.
-  S.taxi = { active: true, candidate: null, dest, timer: 90 };
-  S.toast(`Fare to ${dest.label} — 90 seconds, drive safe`, 2.5);
-  S.audio.pickup();
+// ---------------------------------------------------------------- taxi fares
+
+/** Spawn a glowing taxi customer on a sidewalk near the player. */
+export function spawnTaxiCustomer(G, rng) {
+  const p = G.player;
+  const a = rng() * Math.PI * 2;
+  const x = Math.max(80, Math.min(WORLD - 80, p.x + Math.cos(a) * (200 + rng() * 300)));
+  const y = Math.max(80, Math.min(WORLD - 80, p.y + Math.sin(a) * (200 + rng() * 300)));
+  const ped = makePed(x, y, 'taxi');
+  ped.color = '#7ddb8a';
+  G.peds.push(ped);
+  G.taxiPed = ped;
+}
+
+/** Press E near the waiting taxi customer to take the fare. */
+export function tryTaxiInteract(G) {
+  const p = G.player;
+  if (G.taxi || !G.taxiPed) return false;
+  if (G.taxiPed.state !== 'taxi') return false;
+  if (Math.hypot(p.x - G.taxiPed.x, p.y - G.taxiPed.y) > 70) return false;
+  if (!p.inCar) {
+    G.floaters.push({ x: p.x, y: p.y - 30, text: 'NEED A CAR FOR THE FARE', life: 1.4, color: '#cfc8b8' });
+    return true;
+  }
+  const dests = Object.values(G.city.landmarks).filter((l) => l.label !== 'Lighthouse Point');
+  const dest = dests[Math.floor(Math.random() * dests.length)];
+  const dist = Math.hypot(dest.x - p.x, dest.y - p.y);
+  const fare = 40;
+  G.taxi = {
+    ped: G.taxiPed,
+    dest: { x: dest.x, y: dest.y, label: dest.label },
+    timer: Math.max(35, dist / 260 + 15),
+    totalTime: Math.max(35, dist / 260 + 15),
+    fare,
+  };
+  G.taxiPed.state = 'walk'; // they hop in (abstracted): they vanish into the car
+  G.taxiPed.x = -100;
+  G.taxiPed.y = -100;
+  G.taxiPed = null;
+  G.banner = { text: `TAXI FARE — take the customer to ${dest.label}`, timer: 4 };
+  G.audio.dialogue();
   return true;
+}
+
+export function updateTaxi(G, dt) {
+  const t = G.taxi;
+  if (!t) return;
+  const p = G.player;
+  t.timer -= dt;
+  if (t.timer <= 0) {
+    G.taxi = null;
+    G.floaters.push({ x: p.x, y: p.y - 30, text: 'FARE CANCELLED — TOO SLOW', life: 1.6, color: '#ff5a4e' });
+    G.audio.fail();
+    return;
+  }
+  if (p.inCar && Math.hypot(p.x - t.dest.x, p.y - t.dest.y) < 110) {
+    const tip = Math.round((t.timer / t.totalTime) * 60);
+    const total = t.fare + tip;
+    p.cash += total;
+    G.taxiCount = (G.taxiCount || 0) + 1;
+    G.floaters.push({ x: p.x, y: p.y - 40, text: `FARE +$${total} (TIP $${tip})`, life: 1.8, color: '#7ddb8a' });
+    G.audio.cash();
+    G.taxi = null;
+  }
 }

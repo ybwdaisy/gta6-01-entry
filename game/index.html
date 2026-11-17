@@ -7,77 +7,89 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="stage">
-  <canvas id="game" width="1280" height="800"></canvas>
+<canvas id="game"></canvas>
 
-  <div id="hud" class="hidden">
-    <div id="hud-top-left">
-      <div id="stars" aria-label="wanted level"></div>
-      <div id="clock">08:00 · Day 1</div>
+<!-- ============ HUD ============ -->
+<div id="hud">
+  <div id="top-left">
+    <div id="bars">
+      <div class="bar-row"><span class="bar-label">HP</span><div class="bar"><div id="health-fill" class="fill health"></div></div><span id="health-text" class="bar-num">100</span></div>
+      <div class="bar-row"><span class="bar-label">AR</span><div class="bar"><div id="armor-fill" class="fill armor"></div></div><span class="bar-num">0</span></div>
     </div>
-    <div id="hud-top-right">
-      <div id="cash">$0</div>
-      <div id="weapon">PISTOL · 12 / 12</div>
-    </div>
-    <div id="hud-bottom-left">
-      <div class="bar-label">HEALTH</div>
-      <div class="bar"><div id="hp-fill"></div></div>
-      <div class="bar-label">ARMOR</div>
-      <div class="bar"><div id="armor-fill"></div></div>
-      <div id="speed">0 mph</div>
-    </div>
-    <div id="hud-bottom-right">
-      <canvas id="minimap" width="220" height="220"></canvas>
-      <div id="zone">Serena Bay</div>
-    </div>
-    <div id="objective"></div>
-    <div id="mission-banner" class="hidden"></div>
-    <div id="toast"></div>
-    <div id="hint">WASD move · E enter car · F exit · Click shoot · R reload · M mute · Esc pause</div>
+    <div id="cash-row"><span id="cash-text">$250</span><span id="stars">☆☆☆☆☆</span></div>
+    <div id="weapon-text">PISTOL 12/48</div>
+    <div id="objective-text">Go to the M marker to start: First Run</div>
   </div>
+  <div id="top-right">
+    <div id="clock-text">Day 1  08:00</div>
+    <canvas id="minimap" width="180" height="180"></canvas>
+  </div>
+  <div id="mission-banner"></div>
+  <div id="taxi-text"></div>
+  <div id="interact-text"></div>
+</div>
+<div id="flash"></div>
 
-  <div id="menu" class="card">
-    <h1>SERENA BAY <span>HEAT</span></h1>
-    <p class="tagline">A sun-soaked coastal city. One courier. Six jobs for the harbor boss.</p>
-    <p class="sub">An original open-world crime game — no part of it belongs to any other game.</p>
+<!-- ============ dialogue card ============ -->
+<div id="dialogue-card" class="overlay-card">
+  <h2 id="dialogue-title"></h2>
+  <div id="dialogue-body"></div>
+  <p class="hint">Click or press Enter to continue</p>
+</div>
+
+<!-- ============ start screen ============ -->
+<div id="start-screen" class="overlay show">
+  <div class="panel">
+    <h1 class="title">SERENA BAY <span>HEAT</span></h1>
+    <p class="tagline">A courier. A harbor boss. A city that never sleeps.</p>
+    <p class="intro">Top-down open-world crime in the sun-soaked coastal city of Serena Bay.
+      Drive, steal, run fares and work six missions for Marta Vidal — while the
+      Serena Bay PD keeps count of everything you do.</p>
     <div class="menu-buttons">
-      <button id="btn-new">New Game</button>
-      <button id="btn-continue" class="hidden">Continue</button>
-      <button id="btn-how">How to Play</button>
+      <button id="btn-new" class="btn primary">New Game</button>
+      <button id="btn-continue" class="btn">Continue</button>
+      <button id="btn-how" class="btn">How to play</button>
     </div>
-    <div id="howto" class="hidden">
-      <p><b>Move</b> WASD / arrows · <b>Sprint</b> Shift · <b>Enter / exit car</b> E / F</p>
-      <p><b>Drive</b> W accelerate · S brake / reverse · A D steer · Space handbrake · H horn</p>
-      <p><b>Fight</b> Mouse aim · Click shoot · R reload (12-round pistol)</p>
-      <p><b>Steal a car</b> — walk up and press E. Parked cars are free; pulling a driver out earns heat.</p>
-      <p><b>Wanted stars</b> — crimes raise heat. Lay low to cool off, or pay $150 at Talleres Pipo for a repaint.</p>
-      <p><b>Missions</b> — follow the yellow blip on the minimap. Gold markers pay. Taxi fares pay too.</p>
-      <p><b>Save</b> — autosaves after every mission. <b>Pause</b> Esc / P · <b>Mute</b> M</p>
+    <div id="how-panel" class="how">
+      <h3>How to play</h3>
+      <ul>
+        <li><b>WASD / arrows</b> — walk &nbsp;·&nbsp; <b>Shift</b> — sprint</li>
+        <li><b>Mouse</b> — aim &nbsp;·&nbsp; <b>Click</b> — shoot &nbsp;·&nbsp; <b>R</b> — reload</li>
+        <li><b>E</b> — steal a car / talk / take a fare / repaint &nbsp;·&nbsp; <b>F</b> — leave the car</li>
+        <li><b>Esc / P</b> — pause &nbsp;·&nbsp; <b>M</b> — mute</li>
+        <li>Follow the <b class="gold">M</b> marker for Marta's missions. Lose the cops at
+          <b>Talleres Pipo</b> ($150 repaint) or by staying out of sight.</li>
+        <li>Progress autosaves when you finish a mission.</li>
+      </ul>
     </div>
-    <p class="credits">Serena Bay Heat · built for make.fun gta6-01 · original city, characters, art and sound</p>
-  </div>
-
-  <div id="dialogue" class="card hidden">
-    <div id="dialogue-speaker"></div>
-    <div id="dialogue-text"></div>
-    <button id="dialogue-next">Continue ▸</button>
-  </div>
-
-  <div id="pause" class="card hidden">
-    <h2>PAUSED</h2>
-    <p id="pause-stats"></p>
-    <div class="menu-buttons">
-      <button id="btn-resume">Resume</button>
-      <button id="btn-quit">Save &amp; Quit to Menu</button>
-    </div>
-  </div>
-
-  <div id="endcard" class="card hidden">
-    <h2 id="endcard-title"></h2>
-    <p id="endcard-text"></p>
-    <button id="btn-endcard">Continue</button>
+    <p class="credits">Serena Bay Heat — an original game. No Rockstar / GTA assets, names or music.
+      Built for make.fun's gta6-01 bounty.</p>
   </div>
 </div>
+
+<!-- ============ pause screen ============ -->
+<div id="pause-screen" class="overlay">
+  <div class="panel">
+    <h2>PAUSED</h2>
+    <p>Serena Bay waits for no one. Except right now.</p>
+    <div class="menu-buttons">
+      <button id="btn-resume" class="btn primary">Resume</button>
+      <button id="btn-quit-menu" class="btn">Save &amp; quit to menu</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ busted / wasted screen ============ -->
+<div id="end-screen" class="overlay">
+  <div class="panel">
+    <h2 id="end-title">BUSTED</h2>
+    <div id="end-body"></div>
+    <div class="menu-buttons">
+      <button id="btn-respawn" class="btn primary">Wake up at the Clinica</button>
+    </div>
+  </div>
+</div>
+
 <script type="module" src="src/main.js"></script>
 </body>
 </html>

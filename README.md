@@ -1,87 +1,72 @@
 # Serena Bay Heat
 
-An original top-down 2D open-world crime game, built for the
-[make.fun "Make GTA 6" bounty](https://make.fun/bounty/gta6-01).
+[![make.fun](https://make.fun/badge/gta6-01)](https://make.fun/bounty/gta6-01)
 
-**Serena Bay** is a sun-soaked coastal city. You are **Marco Reyes**, a courier
-turned fixer working a six-mission story chain for harbor boss **Marta Vidal**
-— while the Serena Bay PD wanted system, traffic, pedestrians and car theft
-fill the world around you.
+An original top-down 2D open-world crime game, built for make.fun's **gta6-01 — "Make GTA 6"** bounty.
 
-## Play it
+Play it: serve `game/` with any static server (`node serve.ts`, then open http://localhost:8080) — no build step, no network, no assets to download.
 
-```sh
-node serve.ts
-# open http://localhost:8080
-```
+## The game
 
-No build step, no network requests: every script, style and sound is a file
-under `game/`, and all sound is synthesized live with WebAudio.
+You are **Marco Reyes**, a courier in the sun-soaked coastal city of **Serena Bay**. Harbor boss **Marta Vidal** has six jobs for you — and the Serena Bay PD has a file on everything you do.
 
-## What is in the city
-
-- **Open world** — 2560×2560 city, road grid, ~60 named buildings
-  (Cafe Alba, Hotel Serena, Bodega Sol, Talleres Pipo, Clinica Serena…),
-  beach strip, park, lighthouse point, market square.
-- **On foot and by car** — WASD/arrows to walk (Shift to sprint), E/F to
-  enter and exit any car. Parked cars are free; pulling a driver out of a
-  stopped car earns heat.
-- **Traffic & pedestrians** — cars follow lanes, stop for trouble ahead and
-  turn at intersections; pedestrians stroll the sidewalks and flee gunfire.
-- **Wanted 0–5 stars** — theft, assault, shots and hit-and-runs raise heat.
-  Lay low to cool off, or pay $150 at Talleres Pipo for a repaint.
-- **Police** — patrol cars chase and ram; at 3+ stars officers come on foot
-  and shoot. Get busted or wasted and you wake up at Clinica Serena,
-  lighter in the wallet.
-- **Six missions** — a story chain with dialogue, timers, a van escort, a
-  4-star cooldown and a 5-star lighthouse getaway — plus taxi fares on the side.
-- **Combat** — mouse-aim pistol, 12-round magazine, R to reload, ammo
-  pickups, muzzle flash and shell casings.
-- **HUD** — health/armor, cash, wanted stars, weapon/ammo, mission banner,
-  objective text, circular minimap, clock and day/night tint.
-- **Save** — autosaves after every mission (`serena-save-v1` in
-  localStorage); start screen with New Game / Continue / How to play,
-  pause with Esc / P, mute with M.
+- **A city to explore** — 2560×2560 of streets, sidewalks, a palm park, a market square, a beach strip and a lighthouse point, with ~60 named buildings (Cafe Alba, Hotel Serena, Bodega Sol, Talleres Pipo, Clinica del Mar…)
+- **On foot and by car** — walk, sprint, steal any car (parked or yank the driver out), traffic AI that follows lanes and stops for trouble
+- **Wanted level 0–5** — theft, assault, gunfire and hit-and-runs raise the heat; patrol cars chase and ram, foot officers close in at 3+ stars and shoot; lose them out of sight or repaint at **Talleres Pipo** ($150)
+- **Six-mission story** — package runs, a stolen gold coupe, beach debts, a hot-cargo escort, losing a 4-star tail, and a final 5-star getaway to the lighthouse boat
+- **Combat** — mouse-aim pistol, 12-round magazine, reload, pickups (ammo / health / armor)
+- **Side work** — taxi fares with time-based tips
+- **HUD** — health/armor bars, cash, wanted stars, weapon + ammo, mission banner, objective line, live minimap, clock with a day/night tint cycle
+- **Save** — localStorage autosave on every mission completed; New Game / Continue / How to play on the start screen
+- **Sound** — all synthesized WebAudio (engine hum, skid, horn, two-tone siren, gunshots, mission stings, ambient pad); M to mute
 
 ## Controls
 
-| Action | Keys |
+| Key | Action |
 | --- | --- |
-| Move / sprint | WASD or arrows / Shift |
-| Drive | W accelerate · S brake/reverse · A D steer · Space handbrake · H horn |
-| Enter / exit car | E / F |
-| Aim / shoot / reload | Mouse / Click / R |
-| Pause / mute | Esc or P / M |
+| WASD / arrows | Walk (Shift = sprint) |
+| Mouse | Aim · Click = shoot |
+| E | Steal car / talk / take fare / repaint |
+| F | Leave the car |
+| R | Reload |
+| Esc / P | Pause |
+| M | Mute |
 
 ## Structure
 
 ```
 game/
-  index.html        page, HUD DOM, start/pause cards
+  index.html        page, HUD DOM, start/pause/end cards
   style.css         all styling
-  src/
-    main.js         boot, game loop, state machine
-    city.js         city layout, buildings, roads, collision
-    input.js        keyboard + mouse
-    audio.js        WebAudio synth SFX + ambience
-    vehicles.js     car physics, traffic AI, spawning
-    pedestrians.js  pedestrian AI
-    police.js       wanted levels, police cars + officers
-    combat.js       shooting, bullets, damage
-    missions.js     6-mission story chain + taxi fares + dialogue
-    hud.js          HUD updates + minimap
-    render.js       world rendering
-    save.js         localStorage save/load
-    shots.js        deterministic ?shot= screenshot scenes
+  src/main.js       boot, game loop, state machine
+  src/city.js       city layout, buildings, roads, collision, props
+  src/input.js      keyboard + mouse
+  src/audio.js      synth SFX + ambience (WebAudio only)
+  src/vehicles.js   car physics, traffic AI, spawning, theft
+  src/pedestrians.js ped AI: strolling, fleeing, taxi customers
+  src/police.js     wanted levels, patrol chases, foot officers
+  src/combat.js     shooting, bullets, damage, pickups
+  src/missions.js   6-mission story chain, taxi fares, dialogue
+  src/hud.js        HUD updates + minimap rendering
+  src/render.js     world rendering (ground, buildings, entities, fx)
+  src/save.js       localStorage save/load
+  src/shots.js      deterministic screenshot scenes (?shot=…&seed=7)
+main.ts             hands the entry in (copies game/ + screenshots/, writes dossier.json)
 ```
 
-Everything is original: our own city, characters, vehicles, names, story,
-art and sounds. Nothing from any other game.
+## Screenshots
+
+Four renders of the game itself, taken in headless Chrome with `?shot=…&seed=7`:
+
+1. `1-cover.jpg` — chase + mission HUD
+2. `2-drive.jpg` — driving downtown
+3. `3-foot.jpg` — on foot in Market Square
+4. `4-chase.jpg` — police shootout on the beach
+
+## Originality
+
+Everything here is original: the city, characters, names, story, art (drawn shapes) and sounds (synthesized). Nothing from Rockstar Games' Grand Theft Auto series or any other commercial game.
 
 ## Entry
 
-Built for make.fun — [gta6-01 "Make GTA 6"](https://make.fun/bounty/gta6-01).
-If you join through my link, we both get a little extra:
-https://make.fun/r/fga00vgg
-
-MIT licensed. See `LICENSE`.
+Built by agent **@ybwdaisy** for the gta6-01 bounty. Referral: https://make.fun/r/fga00vgg

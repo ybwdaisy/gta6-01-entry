@@ -1,144 +1,144 @@
-// Deterministic screenshot scenes: ?shot=cover|drive|foot|chase&seed=7.
-// Stages a busy, readable scene, then sets window.__shotReady so the
-// headless capture knows the frame is staged.
-import { makeRng } from './city.js';
+// shots.js — deterministic screenshot scenes (?shot=cover|drive|foot|chase
+// &seed=7). Each stages the world so the cover shows a chase with the
+// mission HUD, and the others show driving, on-foot play and a shootout.
+// main.js sets window.__shotReady after a few frames have rendered.
 
-export function stageShot(S, mode, seed) {
-  const rng = makeRng(seed);
-  const p = S.player;
-  // A known-good vantage: downtown, on the main north-south road.
-  p.x = 1120; p.y = 1560;
-  p.hp = 100; p.armor = 60;
-  p.cash = 2450;
-  p.weapon.ammo = 9; p.weapon.reserve = 36;
-  S.day = 1;
-  S.clockSec = 2 * 90; // 10:00, bright morning light (1 game hour = 90s).
-  S.state = 'playing';
-  S.menuVisible = false;
+import { mulberry32 } from './city.js';
+import { makeCar } from './vehicles.js';
+import { makePed } from './pedestrians.js';
+import { addWanted } from './police.js';
+
+/** Place a few traffic cars around a point, on the roads. */
+function stageTraffic(G, rng, cx, cy, count) {
+  for (let i = 0; i < count; i++) {
+    const x = cx + (rng() - 0.5) * 700;
+    const y = cy + (rng() - 0.5) * 500;
+    const car = makeCar(x, y, Math.floor(rng() * 4) * Math.PI / 2, ['sedan', 'coupe', 'van', 'taxi'][Math.floor(rng() * 4)], 'traffic');
+    car.speed = 100 + rng() * 60;
+    G.cars.push(car);
+  }
+}
+
+/** Scatter pedestrians on the sidewalks around a point. */
+function stagePeds(G, rng, cx, cy, count) {
+  for (let i = 0; i < count; i++) {
+    const ped = makePed(cx + (rng() - 0.5) * 600, cy + (rng() - 0.5) * 400, 'walk');
+    G.peds.push(ped);
+  }
+}
+
+/** Put the player in a car at (x,y) heading `angle`. */
+function stagePlayerCar(G, x, y, angle, color) {
+  const car = makeCar(x, y, angle, 'sedan', 'player', color || '#c94f3d');
+  car.speed = 320;
+  G.cars.push(car);
+  const p = G.player;
+  p.inCar = car;
+  p.x = x;
+  p.y = y;
+  p.angle = angle;
+  return car;
+}
+
+/** A patrol car chasing the player from behind. */
+function stageChaser(G, x, y, angle) {
+  const car = makeCar(x, y, angle, 'sedan', 'police', '#1c2733');
+  car.top = 620;
+  car.speed = 300;
+  car.siren = true;
+  G.cars.push(car);
+  return car;
+}
+
+export function setupShot(G, mode, seed = 7) {
+  const rng = mulberry32(seed);
+  const p = G.player;
+  const L = G.city.landmarks;
+  G.shotMode = mode;
 
   if (mode === 'cover') {
-    // Chase + mission HUD: 3-star heat, cop cars closing in, mission 5 banner.
-    p.wanted = 3;
-    S.mission = { index: 4, stage: 0, timer: 0, data: {}, active: true };
-    S.objective = 'Lose a 4-star wanted level, then slip to the safehouse.';
-    S.showBanner('SIRENS', 'Lose the heat — then reach the safehouse');
-    const car = {
-      x: 1120, y: 1560, angle: -Math.PI / 2, speed: 300, color: '#e74c3c',
-      name: 'Coral GT', traffic: false, parked: false, police: false, hp: 100,
-    };
-    S.cars.push(car);
-    S.player.car = car;
-    for (let i = 0; i < 2; i++) {
-      const a = rng() * Math.PI * 2;
-      S.cops.push({
-        x: p.x + Math.cos(a) * 260, y: p.y + Math.sin(a) * 260,
-        angle: a, speed: 280, color: '#1c2733', name: 'SBPD Interceptor',
-        traffic: false, parked: false, police: true, hp: 100, kind: 'car', ramCooldown: 0,
-      });
-    }
-    for (const c of S.cops) S.cars.push(c);
-    for (let i = 0; i < 8; i++) {
-      const car2 = {
-        x: 700 + rng() * 700, y: 1300 + rng() * 500,
-        angle: Math.floor(rng() * 4) * Math.PI / 2, speed: 60 + rng() * 40,
-        color: ['#3498db', '#f1c40f', '#2ecc71', '#e67e22'][i % 4],
-        name: 'Traffic', traffic: true, parked: false, police: false, hp: 100,
-        lane: 1, axis: rng() > 0.5 ? 'h' : 'v', along: 0, turnCooldown: 0, driver: true,
-      };
-      S.cars.push(car2);
-    }
-    for (let i = 0; i < 6; i++) {
-      S.peds.push({
-        x: 760 + rng() * 520, y: 1380 + rng() * 380, angle: rng() * 6.28,
-        speed: 40, shirt: '#3498db', skin: '#e0ac69', hp: 100, flee: 1.5,
-        fleeX: p.x, fleeY: p.y, panic: 1, walkPhase: rng() * 6, horizontal: true,
-        road: 1440, dir: 1, changeIn: 5, taxi: false, dead: false,
-      });
-    }
+    // The cover: a chase with the mission HUD — Marco fleeing down Calle Mayor
+    // in Marta's borrowed sedan, two SBPD cruisers on his tail, First Run live.
+    stagePlayerCar(G, 1200, 1120, 0, '#c94f3d');
+    stageChaser(G, 1020, 1136, 0);
+    stageChaser(G, 960, 1088, 0);
+    stageTraffic(G, rng, 1400, 1120, 4);
+    stagePeds(G, rng, 1200, 1120, 8);
+    addWanted(G, 3, 'CHASE');
+    G.mission.index = 0;
+    G.mission.phase = 'active';
+    G.mission.timer = 62;
+    G.mission.target = { x: L.marina.x, y: L.marina.y, label: 'Marina Serena' };
+    G.banner = { text: 'First Run — Drive the package to Marina Serena', timer: 999 };
+    p.cash = 1250;
+    p.health = 82;
+    p.armor = 40;
+    p.ammo = 9;
   } else if (mode === 'drive') {
-    // Clean driving shot: player in a car on a main road, traffic around.
-    p.wanted = 0;
-    S.mission = { index: 0, stage: 0, timer: 150, data: {}, active: true };
-    S.objective = 'Drive Marta’s package to the marina before the clock runs out.';
-    const car = {
-      x: 1120, y: 1560, angle: -Math.PI / 2, speed: 220, color: '#3498db',
-      name: 'Cometa', traffic: false, parked: false, police: false, hp: 100,
-    };
-    S.cars.push(car);
-    S.player.car = car;
-    for (let i = 0; i < 7; i++) {
-      S.cars.push({
-        x: 700 + rng() * 700, y: 1100 + rng() * 800,
-        angle: Math.floor(rng() * 4) * Math.PI / 2, speed: 70 + rng() * 30,
-        color: ['#e74c3c', '#f1c40f', '#2ecc71', '#9b59b6', '#ecf0f1'][i % 5],
-        name: 'Traffic', traffic: true, parked: false, police: false, hp: 100,
-        lane: 1, axis: rng() > 0.5 ? 'h' : 'v', along: 0, turnCooldown: 0, driver: true,
-      });
-    }
-    for (let i = 0; i < 8; i++) {
-      S.peds.push({
-        x: 760 + rng() * 520, y: 1200 + rng() * 600, angle: rng() * 6.28,
-        speed: 35, shirt: '#f1c40f', skin: '#c68642', hp: 100, flee: 0,
-        panic: 0, walkPhase: rng() * 6, horizontal: true, road: 1440, dir: 1,
-        changeIn: 5, taxi: false, dead: false,
-      });
-    }
+    // Driving through downtown with traffic and the gold-coupe job on the HUD.
+    stagePlayerCar(G, 1440, 1760, -Math.PI / 2, '#3d6fc9');
+    stageTraffic(G, rng, 1440, 1500, 6);
+    stagePeds(G, rng, 1440, 1600, 7);
+    G.mission.index = 1;
+    G.mission.phase = 'active';
+    G.mission.target = { x: 1000, y: 1120, label: 'Gold Coupe' };
+    const coupe = makeCar(1000, 1120, Math.PI, 'coupe', 'mission', '#e0b13c');
+    G.cars.push(coupe);
+    G.banner = { text: 'Loud Money — Steal the gold coupe at Market Square', timer: 999 };
+    p.cash = 1750;
   } else if (mode === 'foot') {
-    // On-foot market shot: Marco on the sidewalk, debtors/market crowd, taxi fare.
-    p.wanted = 0;
-    p.x = 890; p.y = 1515;
-    S.mission = { index: 2, stage: 0, timer: 0, data: { debtors: [] }, active: true };
-    S.objective = 'Three debtors are hiding on the beach. Lean on each of them.';
-    p.aimAngle = Math.PI / 4;
-    for (let i = 0; i < 10; i++) {
-      S.peds.push({
-        x: 820 + rng() * 260, y: 1440 + rng() * 220, angle: rng() * 6.28,
-        speed: 30 + rng() * 20, shirt: ['#e74c3c', '#2ecc71', '#9b59b6', '#fdcb6e'][i % 4],
-        skin: '#f1c27d', hp: 100, flee: 0, panic: 0, walkPhase: rng() * 6,
-        horizontal: rng() > 0.5, road: 1440, dir: rng() > 0.5 ? 1 : -1,
-        changeIn: 5, taxi: i === 2, dead: false,
-      });
-    }
-    S.pickups.push({ x: 950, y: 1560, kind: 'ammo' });
-    S.pickups.push({ x: 830, y: 1480, kind: 'health' });
+    // On foot in Market Square, peds strolling, the gold coupe waiting.
+    p.inCar = null;
+    p.x = 1120;
+    p.y = 1180;
+    p.angle = Math.PI / 2;
+    stagePeds(G, rng, 1120, 1120, 12);
+    stageTraffic(G, rng, 1120, 800, 3);
+    const coupe = makeCar(1000, 1120, Math.PI, 'coupe', 'mission', '#e0b13c');
+    G.cars.push(coupe);
+    G.mission.index = 1;
+    G.mission.phase = 'active';
+    G.mission.target = { x: 1000, y: 1120, label: 'Gold Coupe' };
+    G.banner = { text: 'Loud Money — Steal the gold coupe at Market Square', timer: 999 };
+    p.cash = 1750;
+    p.health = 100;
+    p.armor = 25;
   } else if (mode === 'chase') {
-    // Police shootout: 5 stars, officers on foot firing, cop cars, sparks.
-    p.wanted = 5;
-    p.x = 1120; p.y = 1120;
-    p.aimAngle = -Math.PI / 3;
-    S.mission = { index: 5, stage: 0, timer: 120, data: {}, active: true };
-    S.objective = 'Five stars. One boat at the lighthouse. Get out of Serena Bay.';
-    S.showBanner('SERENA GOODBYE', 'Reach the lighthouse boat — 5 stars, 2:00 left');
+    // Police shootout on the beach: 4 stars, officers closing in, boat run live.
+    p.inCar = null;
+    p.x = 2440;
+    p.y = 1500;
+    p.angle = -Math.PI / 2;
+    p.health = 64;
+    p.armor = 10;
+    p.ammo = 7;
+    addWanted(G, 4, '4 STARS');
+    stageChaser(G, 2320, 1440, 0.4);
+    stageChaser(G, 2280, 1600, -0.3);
     for (let i = 0; i < 3; i++) {
       const a = rng() * Math.PI * 2;
-      const cop = {
-        x: p.x + Math.cos(a) * 240, y: p.y + Math.sin(a) * 240,
-        angle: a, speed: 300, color: '#1c2733', name: 'SBPD Interceptor',
-        traffic: false, parked: false, police: true, hp: 100, kind: 'car', ramCooldown: 0,
-      };
-      S.cops.push(cop);
-      S.cars.push(cop);
-    }
-    for (let i = 0; i < 3; i++) {
-      const a = rng() * Math.PI * 2;
-      S.cops.push({
-        x: p.x + Math.cos(a) * 170, y: p.y + Math.sin(a) * 170,
-        angle: 0, speed: 0, hp: 100, kind: 'officer', shootCooldown: 0.5,
-        holdTime: 0, walkPhase: rng() * 6,
+      G.officers.push({
+        x: p.x + Math.cos(a) * (180 + rng() * 120),
+        y: p.y + Math.sin(a) * (180 + rng() * 120),
+        angle: a, speed: 0, health: 100,
+        shootCooldown: 0.2 + rng() * 0.5, holdTimer: 0, color: '#1c2733',
       });
     }
-    S.addSparks(p.x + 60, p.y - 40, 12);
-    S.bullets.push({ x: p.x + 20, y: p.y - 10, angle: -Math.PI / 3, speed: 900, life: 0.4, fromCop: false });
+    stagePeds(G, rng, 2440, 1300, 5);
+    // a couple of tracer rounds already in the air
+    G.bullets.push({
+      x: p.x - 120, y: p.y - 60, vx: 700, vy: 260, life: 0.6, from: 'police', damage: 9,
+    });
+    G.mission.index = 5;
+    G.mission.phase = 'active';
+    G.mission.timer = 118;
+    G.mission.target = { x: L.lighthouse.x, y: L.lighthouse.y, label: 'Lighthouse Boat' };
+    G.banner = { text: 'Serena Goodbye — Reach the Lighthouse boat', timer: 999 };
+    p.cash = 4300;
   }
 
-  // Camera on the player, HUD visible.
-  S.camera.x = p.x; S.camera.y = p.y;
-  S.updateCamera(0);
-  S.updateHud();
-  // Let one frame render, then flag ready.
-  requestAnimationFrame(() => {
-    S.render();
-    S.updateHud();
-    window.__shotReady = true;
-  });
+  // camera snaps to the player; the sun is high for the shots
+  G.camera.x = p.x;
+  G.camera.y = p.y;
+  G.clock = 10 * 60 + 25; // 10:25, bright morning light
 }

@@ -1,48 +1,78 @@
-// Keyboard + mouse input. Tracks held keys, edge-triggered presses,
-// and the mouse position in screen and world space.
-export function createInput(canvas) {
-  const keys = {};
-  const pressed = {};
-  const mouse = { x: 0, y: 0, wx: 0, wy: 0, down: false, clicked: false };
+// input.js — keyboard + mouse state, one shared object the loop polls.
+// Keys are tracked by code (KeyW, ArrowUp, ShiftLeft ...), mouse by canvas
+// position converted to world coordinates by the caller.
 
-  function code(e) { return e.code; }
+export function createInput(canvas) {
+  const input = {
+    keys: new Set(),
+    pressed: new Set(), // keys pressed since last poll (edge-triggered)
+    mouseX: 0,
+    mouseY: 0,
+    mouseDown: false,
+    mouseClicked: false, // left click since last poll
+    wheel: 0,
+  };
+
+  const KEY_ALIASES = {
+    KeyW: 'up', ArrowUp: 'up',
+    KeyS: 'down', ArrowDown: 'down',
+    KeyA: 'left', ArrowLeft: 'left',
+    KeyD: 'right', ArrowRight: 'right',
+    ShiftLeft: 'sprint', ShiftRight: 'sprint',
+    KeyE: 'interact', KeyF: 'exit',
+    KeyR: 'reload', KeyM: 'mute',
+    Escape: 'pause', KeyP: 'pause',
+    Space: 'brake',
+    Enter: 'confirm',
+  };
 
   window.addEventListener('keydown', (e) => {
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
-    if (!keys[e.code]) pressed[e.code] = true;
-    keys[e.code] = true;
+    const name = KEY_ALIASES[e.code];
+    if (name) {
+      if (!e.repeat) input.pressed.add(name);
+      input.keys.add(name);
+      if (name === 'pause' || name === 'interact' || name === 'confirm') e.preventDefault();
+    }
+    if (e.code === 'Space') e.preventDefault();
   });
-  window.addEventListener('keyup', (e) => { keys[e.code] = false; });
-  window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+  window.addEventListener('keyup', (e) => {
+    const name = KEY_ALIASES[e.code];
+    if (name) input.keys.delete(name);
+  });
+  window.addEventListener('blur', () => input.keys.clear());
 
   canvas.addEventListener('mousemove', (e) => {
     const r = canvas.getBoundingClientRect();
-    mouse.x = (e.clientX - r.left) * (canvas.width / r.width);
-    mouse.y = (e.clientY - r.top) * (canvas.height / r.height);
+    input.mouseX = e.clientX - r.left;
+    input.mouseY = e.clientY - r.top;
   });
   canvas.addEventListener('mousedown', (e) => {
-    if (e.button === 0) { mouse.down = true; mouse.clicked = true; }
+    if (e.button === 0) {
+      input.mouseDown = true;
+      input.mouseClicked = true;
+    }
   });
-  window.addEventListener('mouseup', (e) => { if (e.button === 0) mouse.down = false; });
+  window.addEventListener('mouseup', (e) => {
+    if (e.button === 0) input.mouseDown = false;
+  });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  return {
-    keys, pressed, mouse,
-    down(...codes) { return codes.some((c) => keys[c]); },
-    hit(...codes) { return codes.some((c) => pressed[c]); },
-    // Movement axis: -1..1 for x and y, from WASD or arrows.
-    moveAxis() {
-      let x = 0, y = 0;
-      if (keys.KeyA || keys.ArrowLeft) x -= 1;
-      if (keys.KeyD || keys.ArrowRight) x += 1;
-      if (keys.KeyW || keys.ArrowUp) y -= 1;
-      if (keys.KeyS || keys.ArrowDown) y += 1;
-      return { x, y };
-    },
-    sprint() { return !!(keys.ShiftLeft || keys.ShiftRight); },
-    endFrame() {
-      for (const k in pressed) pressed[k] = false;
-      mouse.clicked = false;
-    },
-  };
+  return input;
+}
+
+/** True while the named action key is held. */
+export function held(input, name) {
+  return input.keys.has(name);
+}
+
+/** True once, on the frame the key went down. */
+export function wasPressed(input, name) {
+  return input.pressed.has(name);
+}
+
+/** Call at the end of every frame: edge triggers fire exactly once. */
+export function endFrame(input) {
+  input.pressed.clear();
+  input.mouseClicked = false;
+  input.wheel = 0;
 }

@@ -1,101 +1,146 @@
-// Pedestrian AI: walk the sidewalks, cross at intersections, flee gunfire
-// and runaway cars, panic screams (visual), wander the beach and market.
-import { ROADS, ROAD_W, WORLD, nearestRoadCoord, resolveBuildingCollision, clampWorld } from './city.js';
+// pedestrians.js — people on the sidewalks: strollers, panickers, taxi
+// customers and mission debtors. They walk, flee danger, and scream.
 
-const SHIRTS = ['#e74c3c', '#3498db', '#f1c40f', '#2ecc71', '#9b59b6', '#e67e22', '#1abc9c', '#fd79a8', '#dfe6e9', '#fdcb6e'];
-const SKINS = ['#f1c27d', '#e0ac69', '#c68642', '#8d5524', '#ffdbac'];
+import { WORLD, collideCircle, randomSidewalkPoint, isOnRoad } from './city.js';
 
-export function makePed(x, y, rng) {
-  const horizontal = rng() > 0.5;
-  const road = ROADS[Math.floor(rng() * ROADS.length)];
+const SHIRT_COLORS = ['#e0b13c', '#4fae62', '#c94f3d', '#5b7d9e', '#b03d6f', '#e8e2d4', '#8a5fb0', '#d97b3d'];
+const PANTS_COLORS = ['#2e2e34', '#3d4a5c', '#5c463d', '#24402e'];
+
+export function makePed(x, y, state = 'walk') {
   return {
     x, y,
-    angle: rng() * Math.PI * 2,
-    speed: 28 + rng() * 30,
-    shirt: SHIRTS[Math.floor(rng() * SHIRTS.length)],
-    skin: SKINS[Math.floor(rng() * SKINS.length)],
-    hp: 100,
-    flee: 0,
-    panic: 0,
-    walkPhase: rng() * Math.PI * 2,
-    horizontal,
-    road,
-    dir: rng() > 0.5 ? 1 : -1,
-    changeIn: 2 + rng() * 5,
-    taxi: false,
-    dead: false,
+    angle: Math.random() * Math.PI * 2,
+    speed: 45 + Math.random() * 35,
+    state, // 'walk' | 'flee' | 'panic' | 'down' | 'taxi' | 'debtor' | 'dead'
+    health: 100,
+    color: SHIRT_COLORS[Math.floor(Math.random() * SHIRT_COLORS.length)],
+    pants: PANTS_COLORS[Math.floor(Math.random() * PANTS_COLORS.length)],
+    timer: 0,
+    downTimer: 0,
+    screamCooldown: 2 + Math.random() * 4,
+    targetX: x,
+    targetY: y,
+    bob: Math.random() * 10,
   };
 }
 
-export function spawnPed(rng, player, city) {
-  for (let tries = 0; tries < 8; tries++) {
-    const x = 120 + rng() * (WORLD - 240);
-    const y = 120 + rng() * (WORLD - 240);
-    if (Math.hypot(x - player.x, y - player.y) < 320) continue;
-    if (Math.hypot(x - player.x, y - player.y) > 1100) continue;
-    return makePed(x, y, rng);
+export function seedPeds(G, rng, count = 26) {
+  for (let i = 0; i < count; i++) {
+    const p = randomSidewalkPoint(rng);
+    G.peds.push(makePed(p.x, p.y, 'walk'));
   }
-  return null;
 }
 
-export function updatePeds(S, dt) {
-  for (const p of S.peds) {
-    if (p.dead) continue;
-    p.walkPhase += dt * (p.flee > 0 ? 14 : 7);
-    p.changeIn -= dt;
-    if (p.flee > 0) {
-      p.flee -= dt;
-      p.panic = Math.max(p.panic, 1.2);
-      // Run away from the danger point.
-      const dx = p.x - p.fleeX, dy = p.y - p.fleeY;
-      const d = Math.hypot(dx, dy) || 1;
-      p.angle = Math.atan2(dy / d, dx / d);
-      p.x += Math.cos(p.angle) * 130 * dt;
-      p.y += Math.sin(p.angle) * 130 * dt;
-    } else {
-      p.panic = Math.max(0, p.panic - dt);
-      // Stroll along a sidewalk: offset from a road line.
-      if (p.changeIn <= 0) {
-        p.changeIn = 3 + Math.random() * 6;
-        if (Math.random() < 0.4) p.dir *= -1;
-        if (Math.random() < 0.25) {
-          p.horizontal = !p.horizontal;
-          p.road = ROADS[Math.floor(Math.random() * ROADS.length)];
+/** Peds near (x,y) within radius panic and run away from the danger. */
+export function scarePeds(G, x, y, radius = 260) {
+  for (const ped of G.peds) {
+    if (ped.state === 'down' || ped.state === 'dead') continue;
+    const d = Math.hypot(ped.x - x, ped.y - y);
+    if (d < radius) {
+      ped.state = 'panic';
+      ped.timer = 2.5 + Math.random() * 2;
+      const away = Math.atan2(ped.y - y, ped.x - x);
+      ped.targetX = ped.x + Math.cos(away) * 300;
+      ped.targetY = ped.y + Math.sin(away) * 300;
+    }
+  }
+}
+
+function pickStrollTarget(ped) {
+  const a = Math.random() * Math.PI * 2;
+  const dist = 120 + Math.random() * 260;
+  ped.targetX = Math.max(60, Math.min(WORLD - 60, ped.x + Math.cos(a) * dist));
+  ped.targetY = Math.max(60, Math.min(WORLD - 60, ped.y + Math.sin(a) * dist));
+}
+
+export function updatePeds(G, dt) {
+  const player = G.player;
+  for (const ped of G.peds) {
+    ped.bob += dt * 8;
+    if (ped.state === 'down') {
+      ped.downTimer -= dt;
+      if (ped.downTimer <= 0) {
+        ped.state = 'flee';
+        ped.timer = 3;
+        ped.health = 50;
+      }
+      continue;
+    }
+    if (ped.state === 'dead') continue;
+
+    // a speeding car right on top of a ped makes them dive away
+    if (ped.state === 'walk' || ped.state === 'taxi') {
+      for (const car of G.cars) {
+        if (Math.abs(car.speed) < 120) continue;
+        const d = Math.hypot(ped.x - car.x, ped.y - car.y);
+        if (d < 70) {
+          ped.state = 'panic';
+          ped.timer = 2;
+          const away = Math.atan2(ped.y - car.y, ped.x - car.x);
+          ped.targetX = ped.x + Math.cos(away) * 260;
+          ped.targetY = ped.y + Math.sin(away) * 260;
+          break;
         }
       }
-      const off = ROAD_W / 2 + 14;
-      if (p.horizontal) {
-        p.y = p.road + off;
-        p.x += p.dir * p.speed * dt;
-        p.angle = p.dir > 0 ? 0 : Math.PI;
-      } else {
-        p.x = p.road + off;
-        p.y += p.dir * p.speed * dt;
-        p.angle = p.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
-      }
-      // Turn around at the world edge.
-      if (p.x < 80 || p.x > WORLD - 80 || p.y < 80 || p.y > WORLD - 80) p.dir *= -1;
     }
-    resolveBuildingCollision(p, 12, S.city.buildings);
-    clampWorld(p, 16);
-  }
-  // Keep the streets populated near the player.
-  const near = S.peds.filter((p) => !p.dead && Math.hypot(p.x - S.player.x, p.y - S.player.y) < 1000).length;
-  if (near < 16 && Math.random() < dt * 1.5) {
-    const p = spawnPed(Math.random, S.player, S.city);
-    if (p) S.peds.push(p);
-  }
-  S.peds = S.peds.filter((p) => !p.dead || p.deadFor < 4);
-}
 
-// Flee from a danger point (gunshot, explosion, speeding car).
-export function scarePeds(S, x, y, radius = 320) {
-  for (const p of S.peds) {
-    if (p.dead) continue;
-    const d = Math.hypot(p.x - x, p.y - y);
-    if (d < radius) {
-      p.flee = 2.5 + Math.random();
-      p.fleeX = x; p.fleeY = y;
+    if (ped.state === 'panic' || ped.state === 'flee') {
+      ped.timer -= dt;
+      ped.screamCooldown -= dt;
+      if (ped.screamCooldown <= 0 && Math.random() < 0.3) {
+        G.audio.hit(); // short yelp through the hit blip
+        ped.screamCooldown = 3 + Math.random() * 3;
+      }
+      const dx = ped.targetX - ped.x;
+      const dy = ped.targetY - ped.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 12 || ped.timer <= 0) {
+        ped.state = 'walk';
+        pickStrollTarget(ped);
+        continue;
+      }
+      const speed = ped.state === 'panic' ? 210 : 170;
+      ped.angle = Math.atan2(dy, dx);
+      const nx = ped.x + Math.cos(ped.angle) * speed * dt;
+      const ny = ped.y + Math.sin(ped.angle) * speed * dt;
+      const res = collideCircle(G.city, nx, ny, 12);
+      ped.x = res.x;
+      ped.y = res.y;
+      continue;
     }
+
+    if (ped.state === 'taxi' || ped.state === 'debtor') {
+      // waiting customers and debtors stand still (missions move them)
+      continue;
+    }
+
+    // ordinary strolling: walk toward the target, pick a new one on arrival
+    ped.timer -= dt;
+    const dx = ped.targetX - ped.x;
+    const dy = ped.targetY - ped.y;
+    const d = Math.hypot(dx, dy);
+    if (d < 14 || ped.timer <= 0) {
+      pickStrollTarget(ped);
+      ped.timer = 6 + Math.random() * 6;
+      continue;
+    }
+    ped.angle = Math.atan2(dy, dx);
+    const nx = ped.x + Math.cos(ped.angle) * ped.speed * dt;
+    const ny = ped.y + Math.sin(ped.angle) * ped.speed * dt;
+    // peds avoid stepping onto the road unless they must cross: slow them there
+    const speed = isOnRoad(nx, ny) ? ped.speed * 1.4 : ped.speed;
+    const res = collideCircle(G.city, ped.x + Math.cos(ped.angle) * speed * dt, ped.y + Math.sin(ped.angle) * speed * dt, 12);
+    ped.x = res.x;
+    ped.y = res.y;
+  }
+
+  // keep the streets populated near the player
+  const near = G.peds.filter((p) => Math.hypot(p.x - player.x, p.y - player.y) < 900).length;
+  if (near < 14 && Math.random() < 0.02) {
+    const p = randomSidewalkPoint(Math.random);
+    const px = Math.max(60, Math.min(WORLD - 60, player.x + (Math.random() - 0.5) * 1200));
+    const py = Math.max(60, Math.min(WORLD - 60, player.y + (Math.random() - 0.5) * 1200));
+    void p;
+    G.peds.push(makePed(px, py, 'walk'));
   }
 }
