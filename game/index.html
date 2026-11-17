@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Serena Bay Heat — an open-world crime game</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="game" width="1280" height="800"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="hud-top-left">
+      <div id="stars" aria-label="wanted level"></div>
+      <div id="clock">08:00 · Day 1</div>
+    </div>
+    <div id="hud-top-right">
+      <div id="cash">$0</div>
+      <div id="weapon">PISTOL · 12 / 12</div>
+    </div>
+    <div id="hud-bottom-left">
+      <div class="bar-label">HEALTH</div>
+      <div class="bar"><div id="hp-fill"></div></div>
+      <div class="bar-label">ARMOR</div>
+      <div class="bar"><div id="armor-fill"></div></div>
+      <div id="speed">0 mph</div>
+    </div>
+    <div id="hud-bottom-right">
+      <canvas id="minimap" width="220" height="220"></canvas>
+      <div id="zone">Serena Bay</div>
+    </div>
+    <div id="objective"></div>
+    <div id="mission-banner" class="hidden"></div>
+    <div id="toast"></div>
+    <div id="hint">WASD move · E enter car · F exit · Click shoot · R reload · M mute · Esc pause</div>
+  </div>
+
+  <div id="menu" class="card">
+    <h1>SERENA BAY <span>HEAT</span></h1>
+    <p class="tagline">A sun-soaked coastal city. One courier. Six jobs for the harbor boss.</p>
+    <p class="sub">An original open-world crime game — no part of it belongs to any other game.</p>
+    <div class="menu-buttons">
+      <button id="btn-new">New Game</button>
+      <button id="btn-continue" class="hidden">Continue</button>
+      <button id="btn-how">How to Play</button>
+    </div>
+    <div id="howto" class="hidden">
+      <p><b>Move</b> WASD / arrows · <b>Sprint</b> Shift · <b>Enter / exit car</b> E / F</p>
+      <p><b>Drive</b> W accelerate · S brake / reverse · A D steer · Space handbrake · H horn</p>
+      <p><b>Fight</b> Mouse aim · Click shoot · R reload (12-round pistol)</p>
+      <p><b>Steal a car</b> — walk up and press E. Parked cars are free; pulling a driver out earns heat.</p>
+      <p><b>Wanted stars</b> — crimes raise heat. Lay low to cool off, or pay $150 at Talleres Pipo for a repaint.</p>
+      <p><b>Missions</b> — follow the yellow blip on the minimap. Gold markers pay. Taxi fares pay too.</p>
+      <p><b>Save</b> — autosaves after every mission. <b>Pause</b> Esc / P · <b>Mute</b> M</p>
+    </div>
+    <p class="credits">Serena Bay Heat · built for make.fun gta6-01 · original city, characters, art and sound</p>
+  </div>
+
+  <div id="dialogue" class="card hidden">
+    <div id="dialogue-speaker"></div>
+    <div id="dialogue-text"></div>
+    <button id="dialogue-next">Continue ▸</button>
+  </div>
+
+  <div id="pause" class="card hidden">
+    <h2>PAUSED</h2>
+    <p id="pause-stats"></p>
+    <div class="menu-buttons">
+      <button id="btn-resume">Resume</button>
+      <button id="btn-quit">Save &amp; Quit to Menu</button>
+    </div>
+  </div>
+
+  <div id="endcard" class="card hidden">
+    <h2 id="endcard-title"></h2>
+    <p id="endcard-text"></p>
+    <button id="btn-endcard">Continue</button>
+  </div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
